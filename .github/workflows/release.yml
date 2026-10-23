@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: go vet e go test
+        run: |
+          go vet ./...
+          go test ./...
+      - name: Build
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          New-Item -ItemType Directory dist/pkg/skills -Force | Out-Null
+          go build -trimpath -ldflags "-s -w -X main.version=$tag" -o dist/pkg/simple-orchestrator.exe ./cmd/simple-orchestrator
+          Copy-Item skills/local-agent-flow dist/pkg/skills/local-agent-flow -Recurse
+          Copy-Item install.ps1, README.md, LICENSE dist/pkg/
+          Compress-Archive -Path dist/pkg/* -DestinationPath dist/simple-orchestrator-windows-amd64.zip
+          (Get-FileHash dist/simple-orchestrator-windows-amd64.zip -Algorithm SHA256).Hash.ToLower() + "  simple-orchestrator-windows-amd64.zip" | Set-Content dist/SHA256SUMS.txt
+      - name: Publicar release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" dist/simple-orchestrator-windows-amd64.zip dist/SHA256SUMS.txt --title "${{ github.ref_name }}" --generate-notes

@@ -1,0 +1,74 @@
+{
+  "installed_at_utc": "2026-10-16T18:53:45.261012+00:00",
+  "scope": "project-local",
+  "skills": [
+    {
+      "name": "desenha-sistema",
+      "path": ".agents/skills/desenha-sistema",
+      "distributed": false,
+      "distribution_note": "Not included in the public repository: no redistribution license. Obtain it from the source and place it at this path if needed.",
+      "source": "Deploy Club / Google Drive",
+      "source_url": "https://drive.google.com/drive/folders/1aGbsIjjY60ZD15gKzOuP9LysVI8EaVl1",
+      "local_adaptations": [
+        "SKILL.md: proposed architecture and multi-agent project guidance. Python scripts unchanged."
+      ],
+      "sha256": {
+        "referencias/como-desenhar.md": "593b1cd13d28f7c6bb63227006ca89a49b3147c54c86773129f3ee301a494b76",
+        "referencias/formato-do-mapa.md": "e58d872c39b909dad92e753f68783227dcc47f8893110189c91c4f37ad8f252f",
+        "referencias/onde-procurar.md": "39785a990d1e2718024d83556b9b2b9fc74430a4411c60a6dd7556380bbadcc5",
+        "scripts/desenhar.py": "e1ca4ed14cea45ba3ca2d5db886b7c972c31bc908643b391f73731c6c0416766",
+        "scripts/validar.py": "176cb6927b2a0acb88532c250c86dd0b2e1ae46252a11f518440d9c3dd86361f",
+        "SKILL.md": "cbb83470742de95a4e47dd0a276fb2f3ff1dd7d23e46eb8d602e0e99dfd48d48"
+      }
+    },
+    {
+      "name": "go-concurrency-patterns",
+      "path": ".agents/skills/go-concurrency-patterns",
+      "source": "wshobson/agents",
+      "requested_ref": "044b4b21f083948e69ec878a7b07c8d0951a6ffa",
+      "source_url": "https://github.com/wshobson/agents/tree/044b4b21f083948e69ec878a7b07c8d0951a6ffa/plugins/systems-programming/skills/go-concurrency-patterns",
+      "local_adaptations": [],
+      "sha256": {
+        "references/details.md": "a593801def35a090dea472b8265beefa848c1de7dee1dcf4c42e7c5ff0fd0e31",
+        "SKILL.md": "a66d04f2c616aecc3dd53c23d08cb06903f30a2c190c99e6ba82b3e5315b36b2"
+      }
+    },
+    {
+      "name": "golang-testing",
+      "path": ".agents/skills/golang-testing",
+      "source": "samber/cc-skills-golang",
+      "requested_ref": "main",
+      "resolved_commit": null,
+      "source_url": "https://github.com/samber/cc-skills-golang/tree/main/skills/golang-testing",
+      "local_adaptations": [],
+      "sha256": {
+        "evals/evals.json": "bc083e8d62ff1c23d9cd734f274a5733cfc0d30bb6356e03668dd3c67ff7c92e",
+        "references/benchmarks.md": "f9de0e2e50cbb8e28684da1f99ff15fa84779150b4a8deefdf97ea3345c871f1",
+        "references/coverage.md": "b2f7af52412b084cf353ff493941ad43276cae9d197470db2287b5d2c5a1aebf",
+        "references/examples.md": "40c070f0a83898edbc0c87c034fc2281d9c2b04e0514c94aa1ff07b802b575c5",
+        "references/helpers.md": "8c71d253a246e66b8249022c96d7e8892f5bfc2156b02a36673c321db2c843f4",
+        "references/http-testing.md": "39381274d7887651b86bde513085835f52860aa0832eb6f945f79c008f240e0f",
+        "references/integration-testing.md": "a29e725c58a1c2feaf16470db7eb4f8394aa36a476df92a792ac026c950d0b85",
+        "references/mocking.md": "65558f907dea483831aea4aca50b1d6f1b64f92803bc2446f6a550a6d6c5c33a",
+        "SKILL.md": "55eea3ed4536df0c95fc1247382d3027d45b1d1af0a94fc9de653debae5df0f2"
+      }
+    }
+  ],
+  "validation": {
+    "python_syntax": "passed",
+    "scripts_match_drive_bytes": true,
+    "generation_exit_code": 0,
+    "excalidraw_validation_exit_code": 0,
+    "formats": [
+      "svg",
+      "html",
+      "excalidraw"
+    ],
+    "visual_review_performed": false,
+    "known_limitations": [
+      "Generic secret detection also matches some long relative paths; initial smoke fixture with a long spec path was blocked, corrected to README.md without changing the detector.",
+      "Generated HTML/SVG references Google Fonts; local generation uses standard Python libraries.",
+      "Go toolchain and Go skills execution not tested; no bridge implementation exists yet."
+    ]
+  }
+}
