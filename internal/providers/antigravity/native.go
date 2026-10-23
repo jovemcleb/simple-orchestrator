@@ -91,6 +91,11 @@ func pythonTurnProbe(ctx context.Context, nonce string, since time.Time, convers
 	return st, json.Unmarshal(out, &st)
 }
 
+// noFinalAnswer is reported when the conversation looks idle but holds no final
+// answer yet. It only becomes a failure after it persists (see runNative),
+// because a system step can be written before the model answers.
+const noFinalAnswer = "o turno terminou sem resposta final do modelo"
+
 // turnOutcome decides whether the delegated turn is over. It requires the
 // conversation to be fully idle and the transcript to hold a final answer
 // (a model response without tool calls) after the delegated prompt.
@@ -118,7 +123,20 @@ func turnOutcome(st agyTurnState) (done bool, final *agyStep, failure string) {
 			return true, &st.Steps[i], ""
 		}
 	}
-	return true, nil, "o turno terminou sem resposta final do modelo"
+	return false, nil, noFinalAnswer
+}
+
+// agyConversationOpen reports whether another agy process was started on this
+// conversation. Unlike Codex, agy does not lock a conversation: a second window
+// only warns ("Conversation already open") and both rewrite the transcript.
+// Conversations open in the Antigravity IDE are not detected here.
+func agyConversationOpen(sessionID string) bool {
+	script := fmt.Sprintf("@(Get-CimInstance Win32_Process -Filter \"Name='agy.exe'\" | Where-Object { $_.CommandLine -like '*%s*' }).Count", strings.ReplaceAll(sessionID, "'", ""))
+	out, err := exec.Command("powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script).Output()
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(out)) != "0" && strings.TrimSpace(string(out)) != ""
 }
 
 func failNative(live *monitor.Log, sid, msg string) (runtime.WorkerResult, error) {
@@ -153,6 +171,15 @@ func (a *Adapter) buildInteractiveArgs(cmd protocol.CommandEnvelope, prompt stri
 func (a *Adapter) runNative(ctx context.Context, cmd protocol.CommandEnvelope, cli string, isNewChat bool, syncIDE func(sid string, notifyUI bool)) (runtime.WorkerResult, error) {
 	live := monitor.FromContext(ctx)
 	start := time.Now()
+	if sid := strings.TrimSpace(cmd.WorkerSessionID); sid != "" {
+		open := a.ConversationOpen
+		if open == nil {
+			open = agyConversationOpen
+		}
+		if open(sid) {
+			return failNative(live, sid, fmt.Sprintf("a conversa %s do Antigravity já está aberta em outra janela do agy; duas instâncias na mesma conversa sobrescrevem o histórico uma da outra. Feche a outra janela e delegue de novo, ou delegue para um chat novo", sid))
+		}
+	}
 	nonce := fmt.Sprintf("myo-attempt-%s-%s-%s-%d", cmd.RunID, cmd.TaskID, cmd.AttemptID, start.UnixNano())
 	prompt := codex.BuildPrompt(cmd.Spec) + "\n[" + nonce + "]"
 
@@ -178,6 +205,11 @@ func (a *Adapter) runNative(ctx context.Context, cmd protocol.CommandEnvelope, c
 	synced := false
 	var final *agyStep
 	var st agyTurnState
+	grace := a.NoFinalGrace
+	if grace <= 0 {
+		grace = 30 * time.Second
+	}
+	var noFinalSince time.Time
 	check := func() (bool, string) {
 		pctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
@@ -196,6 +228,13 @@ func (a *Adapter) runNative(ctx context.Context, cmd protocol.CommandEnvelope, c
 		}
 		done, f, failure := turnOutcome(s)
 		final = f
+		if !done && failure == noFinalAnswer {
+			if noFinalSince.IsZero() {
+				noFinalSince = time.Now()
+			}
+			return time.Since(noFinalSince) >= grace, failure
+		}
+		noFinalSince = time.Time{}
 		return done, failure
 	}
 

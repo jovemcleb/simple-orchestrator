@@ -55,6 +55,8 @@ func newHarness(states ...agyTurnState) (*nativeHarness, *scriptedProbe) {
 	p := &scriptedProbe{states: states}
 	h.a.NativeWatch = true
 	h.a.PollInterval = 10 * time.Millisecond
+	h.a.NoFinalGrace = 40 * time.Millisecond
+	h.a.ConversationOpen = func(string) bool { return false }
 	h.a.Probe = p.probe
 	h.a.SyncIDE = func(sid string, _ bool) { h.synced = append(h.synced, sid) }
 	h.a.Launch = func(dir string, argv []string) (<-chan struct{}, func(), error) {
@@ -172,5 +174,36 @@ func TestBuildInteractiveArgs_Resume(t *testing.T) {
 		if !strings.Contains(j, want) {
 			t.Errorf("missing %q in %q", want, j)
 		}
+	}
+}
+
+// Observed in a real run: a SYSTEM_MESSAGE is written after the prompt while the
+// summary still says IDLE, before the model answers. That must not end the turn.
+func TestRunNative_SystemStepBeforeAnswerIsNotTheEnd(t *testing.T) {
+	sys := agyStep{Type: "SYSTEM_MESSAGE", Status: "DONE", Content: "<SYSTEM_MESSAGE>"}
+	h, _ := newHarness(idle(sys), idle(sys), idle(sys, finalStep("MYO_OK")))
+	h.a.NoFinalGrace = time.Second
+	res, err := h.a.RunTask(context.Background(), nativeCmd())
+	if err != nil || res.Summary != "MYO_OK" {
+		t.Fatalf("res=%+v err=%v", res, err)
+	}
+}
+
+func TestRunNative_IdleWithoutAnswerFailsOnlyAfterGrace(t *testing.T) {
+	h, p := newHarness(idle(agyStep{Type: "SYSTEM_MESSAGE", Status: "DONE"}))
+	res, err := h.a.RunTask(context.Background(), nativeCmd())
+	if err == nil || !strings.Contains(res.Summary, "sem resposta final") || p.calls < 3 {
+		t.Fatalf("res=%+v err=%v calls=%d", res, err, p.calls)
+	}
+}
+
+func TestRunNative_ResumeRefusedWhenConversationOpenInAnotherAgy(t *testing.T) {
+	h, _ := newHarness(idle(finalStep("x")))
+	h.a.ConversationOpen = func(string) bool { return true }
+	cmd := nativeCmd()
+	cmd.WorkerSessionID = "conv-open"
+	res, err := h.a.RunTask(context.Background(), cmd)
+	if err == nil || h.argv != nil || !strings.Contains(res.Summary, "já está aberta") {
+		t.Fatalf("res=%+v err=%v argv=%v", res, err, h.argv)
 	}
 }

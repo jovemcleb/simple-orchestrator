@@ -14,12 +14,14 @@ go test ./...
 .\install.ps1   # compila e instala a sua versão local
 ```
 
-Antes de abrir um PR, os três gates precisam passar (o CI roda os mesmos):
+Antes de abrir um PR, os gates precisam passar (o CI roda os mesmos):
 
 ```powershell
 gofmt -l .       # não pode listar nada
 go vet ./...
 go test ./...
+# se mexeu no install.ps1:
+$e=$null; [void][System.Management.Automation.Language.Parser]::ParseFile("$PWD\install.ps1",[ref]$null,[ref]$e); $e
 ```
 
 Use mensagens no formato [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`...).
@@ -48,6 +50,17 @@ Elas vêm da spec (`.specs/features/local-agent-bridge/spec.md`) e são verifica
 3. **Zero inferência na espera (R06).** Espere pelo processo, por arquivos ou por eventos. Nunca chame modelos para "ver como está".
 4. **Uso de tokens honesto (R12).** Só informe `Usage` quando o valor for desta tarefa. Contadores acumulados por sessão não servem para sessões retomadas.
 5. **Sessões explícitas.** Retorne o ID real da sessão do worker em `WorkerSessionID`. Nunca use "a última conversa".
+6. **Uma conversa, um processo.** Ao continuar um chat existente, verifique antes se ele está aberto em outro app ou janela, e recuse com uma instrução clara. O Codex trava a conversa (`~/.codex/thread-writer-locks/<id>.lock`), enquanto o `agy` só avisa e deixa as duas instâncias sobrescreverem o histórico.
+
+### Contrato do `WorkerResult`
+
+| Situação | `Status` | `error` | Campos |
+| --- | --- | --- | --- |
+| Sucesso comprovado | `StatusSucceeded` | `nil` | `Summary` (resposta final, **não vazia**), `WorkerSessionID` real, `ObservedModel` (ou `"unknown"`), `Usage` só se for desta tarefa. |
+| Falha (inclui troca de modelo, janela fechada, timeout) | `StatusFailed` | não nulo, com o mesmo motivo | `Summary` com o motivo legível, mais o que se souber de sessão e modelo. |
+| Pergunta bloqueante ao usuário | `StatusBlocked` | `nil` | `Question` com a pergunta. |
+
+O motor (`internal/runtime`) trata `error != nil` ou `StatusFailed` como falha. Um sucesso com `Summary` vazio vira falha. Se `WorkerSessionID` vier vazio, o motor cria um ID sintético (`worker-<task>-<attempt>`), e isso impede continuar a conversa depois; preencha sempre que a CLI informar.
 
 ## Adicionando um provedor
 
@@ -77,14 +90,18 @@ RunTask(ctx context.Context, cmd protocol.CommandEnvelope) (runtime.WorkerResult
 
 - Monte o prompt com `codex.BuildPrompt(cmd.Spec)` e resolva modelo e esforço com `protocol.ResolveModelAndEffort`.
 - **Modo sem tela:** leia o stream linha a linha, mande cada linha para `monitor.FromContext(ctx).Raw(line)` e decida o resultado só no evento final.
-- **Modo interativo** (`NativeWatch`, padrão): abra a CLI com `codex.DefaultNativeLauncher(dir, argv)`, que já resolve console real, `CI=true` e janela fora do job de quem chamou. Se a CLI vier do npm, use `codex.ResolveNodeCLI` para não passar pelo `.cmd`, que reinterpretaria o prompt. Depois acompanhe os arquivos de sessão até o fim do turno, filtrando eventos anteriores ao início (sessões retomadas). Em timeout ou cancelamento, chame `kill()`; se a janela fechar antes do fim, falhe com o motivo.
-- Deixe injetáveis o lançador, a sonda e o intervalo de leitura, para os testes.
+- **Modo interativo** (`NativeWatch`, padrão): abra a CLI com `codex.DefaultNativeLauncher(dir, argv)`. Ele cria um console real, define `CI=true` e tenta deixar a janela fora do job de quem chamou (com fallback). Se a CLI vier do npm, não passe pelo `.cmd`, que reinterpretaria o prompt: use `codex.ResolveNodeCLI` com o caminho do script de entrada dentro de `node_modules`, que você encontra no próprio `.cmd` do npm. Exemplo: `codex.ResolveNodeCLI(cli, "@github", "copilot", "npm-loader.js")` devolve `[node.exe, ...\node_modules\@github\copilot\npm-loader.js]`; acrescente seus argumentos a esse slice. Depois acompanhe os arquivos de sessão até o fim do turno, filtrando eventos anteriores ao início (sessões retomadas). Um estado "ocioso sem resposta final" pode ser transitório: só declare falha se ele persistir por alguns segundos. Em timeout ou cancelamento, chame `kill()`; se a janela fechar antes do fim, falhe com o motivo.
+- Deixe injetáveis o lançador, a sonda, o intervalo de leitura e a checagem de "conversa aberta", para os testes.
 
 ### 3. Registre o provedor
 
-- Se for um provedor novo, adicione-o em `internal/protocol` (`Provider` e `ValidProvider`).
-- Registre o worker em `buildEngine` (`cmd/simple-orchestrator/main.go`) e chame `mon.SetNative(...)` para ele no modo interativo.
-- Se a saída sem tela tiver um formato novo, ensine `monitor.FormatLine` a traduzi-lo.
+Checklist:
+
+- [ ] `internal/protocol`: adicione o `Provider` e inclua-o em `ValidProvider`.
+- [ ] `internal/protocol/ResolveModelAndEffort`: crie um `case` com o modelo e o esforço padrão (e apelidos, se houver). Sem isso, o provedor cai no ramo genérico (`"default"`, esforço vazio). Se a CLI exigir valores explícitos, recuse o padrão no adaptador, como o Copilot faz.
+- [ ] `cmd/simple-orchestrator/main.go`: registre o worker em `buildEngine`, chame `mon.SetNative(...)` para ele, e adicione em `runDelegate` a flag do caminho da CLI (ex.: `--claude-cli`). Atualize os textos de ajuda que listam provedores aceitos.
+- [ ] `internal/monitor/FormatLine`: ensine-o a traduzir a saída sem tela, se ela tiver um formato novo.
+- [ ] Um teste de CLI ponta a ponta com worker falso (veja `cmd/simple-orchestrator/main_test.go`).
 
 ### 4. Teste
 
@@ -96,12 +113,21 @@ Testes **nunca** abrem janelas nem chamam a CLI real; use lançadores e sondas f
 - janela fechada antes do fim conta como falha;
 - timeout encerra a janela;
 - turnos antigos de uma sessão retomada são ignorados;
+- continuar uma conversa aberta em outro lugar é recusado antes de abrir a janela;
 - argumentos com espaços, aspas, `&`, `|` e quebras de linha chegam intactos.
 
 ### 5. Ensaio real e documentação
 
-- Faça um ensaio curto e barato (ex.: "Responda apenas TOKEN_OK") nas duas direções relevantes e registre em `docs/validation/`.
-- Atualize `skills/local-agent-flow/SKILL.md`, o `README.md` e `.specs/project/STATE.md`.
+Faça ensaios curtos e baratos (ex.: "Responda apenas TOKEN_OK") e registre em `docs/validation/<provedor>.md`. Matriz mínima:
+
+| Ensaio | Obrigatório |
+| --- | --- |
+| Codex → novo provedor (chat novo) | Sim |
+| Antigravity → novo provedor (chat novo) | Sim |
+| Continuar um chat existente do novo provedor | Sim |
+| Novo provedor como maestra → Codex ou Antigravity | Só se ele também puder ser maestra |
+
+Depois, atualize `skills/local-agent-flow/SKILL.md`, o `README.md` (requisitos, limitações) e `.specs/project/STATE.md`.
 
 ## Skills de desenvolvimento
 

@@ -173,20 +173,26 @@ Write-Step 'Conferindo pre-requisitos'
 $agy = Join-Path $env:LOCALAPPDATA 'agy\bin\agy.EXE'
 $checks = @(
     @{ Name = 'Codex CLI (codex)';         Ok = [bool](Get-Command codex -ErrorAction SilentlyContinue); Hint = 'npm install -g @openai/codex  e depois  codex login' },
-    @{ Name = 'Antigravity CLI (agy)';     Ok = (Test-Path $agy) -or [bool](Get-Command agy -ErrorAction SilentlyContinue); Hint = 'instale o Antigravity e faca login no agy' },
+    @{ Name = 'Antigravity CLI (agy)';     Ok = (Test-Path $agy) -or [bool](Get-Command agy -ErrorAction SilentlyContinue); Hint = 'instale o Google Antigravity (https://antigravity.google), abra-o uma vez e faca login; a CLI fica em %LOCALAPPDATA%\agy\bin\agy.exe' },
     @{ Name = 'Python 3 (python)';         Ok = [bool](Get-Command python -ErrorAction SilentlyContinue); Hint = 'necessario para ler os historicos do Codex/Antigravity: https://www.python.org/downloads/' },
     @{ Name = 'Node.js (node)';            Ok = [bool](Get-Command node -ErrorAction SilentlyContinue); Hint = 'necessario para o Codex CLI instalado via npm' },
     @{ Name = 'Windows Terminal (wt)';     Ok = [bool](Get-Command wt -ErrorAction SilentlyContinue); Hint = 'opcional; sem ele as janelas abrem no console classico' }
 )
+$missing = 0
 foreach ($c in $checks) {
-    if ($c.Ok) { Write-Ok $c.Name } else { Write-Warn2 "$($c.Name) nao encontrado: $($c.Hint)" }
+    if ($c.Ok) { Write-Ok $c.Name } else { Write-Warn2 "$($c.Name) nao encontrado: $($c.Hint)"; if ($c.Name -notlike 'Windows Terminal*') { $missing++ } }
 }
 
 Write-Host ''
-Write-Host 'Pronto. Proximos passos:' -ForegroundColor Green
-Write-Host '  1. Reinicie o Codex e o Antigravity para carregarem a skill.'
-Write-Host '  2. No chat, peca por exemplo:'
+if ($missing -gt 0) {
+    Write-Host "Arquivos instalados, mas faltam $missing pre-requisito(s) acima. Instale-os antes de delegar." -ForegroundColor Yellow
+} else {
+    Write-Host 'Pronto. Proximos passos:' -ForegroundColor Green
+}
+Write-Host '  1. Abra um terminal novo e confira: simple-orchestrator version'
+Write-Host '  2. Reinicie o Codex e o Antigravity para carregarem a skill.'
+Write-Host '  3. No chat, peca por exemplo:'
 Write-Host '     "Use a skill local-agent-flow e delegue ao Antigravity: revise o README e liste 3 melhorias (somente leitura)."'
-Write-Host '  3. No Codex, aprove a execucao do comando fora do sandbox quando ele pedir.'
+Write-Host '  4. No Codex, aprove a execucao do comando fora do sandbox quando ele pedir.'
 Write-Host ''
 Write-Host "Ajuda: $InstallDir\$ExeName delegate -h   |   Remover: .\install.ps1 -Uninstall"

@@ -38,7 +38,7 @@ Modelos padrão (quando o usuário não escolher):
 | Codex | `gpt-6.1-sol`, esforço `low` | Aceita `--model` e `--effort` explícitos. |
 
 Chat do worker:
-- **Continuar um chat existente**: passe `--worker-project "<projeto>"` e `--worker-chat "<nome do chat>"`, ou `--worker-session "<ID>"`.
+- **Continuar um chat existente**: passe `--worker-project "<projeto>"` e `--worker-chat "<nome do chat>"`, ou `--worker-session "<ID>"`. O chat **não pode estar aberto em outro lugar**: no Codex, feche-o no Codex Desktop, no VS Code ou em outra janela do Codex (o Codex só permite um app por conversa); no Antigravity, feche outras janelas do `agy` e a conversa na IDE (duas instâncias sobrescrevem o histórico). A ponte recusa na hora quando detecta isso; explique ao usuário o que fechar.
 - **Criar um chat novo** (padrão): omita esses campos e, se quiser, passe `--worker-chat-title "<título>"`. A ponte registra o chat no histórico do Codex ou do Antigravity. No Codex Desktop, o chat novo só aparece na barra lateral depois de recarregar o app.
 
 ## 3. Delegar e aguardar o retorno
@@ -62,7 +62,7 @@ Chat do worker:
 
 - Para o sentido inverso (Antigravity delegando ao Codex), troque `--maestra-provider "antigravity"` e `--worker-provider "codex"`.
 - **Não passe `--timeout`** a menos que o usuário peça: a ponte espera o fim do primeiro turno do worker.
-- O resultado volta como JSON no `stdout`: confira `ok`, `event.summary`, `event.observed_model` e `inference_calls_during_wait` (deve ser `0`).
+- O resultado volta como JSON no `stdout` (código de saída `0`): confira `ok`, `event.summary`, `event.observed_model` e `inference_calls_during_wait` (deve ser `0`). Em falha (código `1`), leia `event.summary` no `stdout`; erros de validação saem como JSON no `stderr`. Apresente o resultado ao usuário neste chat.
 
 ### Como esperar sem gastar inferência
 
@@ -74,9 +74,11 @@ Chat do worker:
 - Toda delegação abre uma janela com a **tela interativa da CLI do worker** (`codex` ou `agy -i`), já com a tarefa como primeiro prompt. O usuário acompanha tudo ao vivo.
 - A ponte devolve o resultado quando esse primeiro turno termina, e a janela continua aberta. O que o usuário digitar nela depois não entra no resultado.
 - **Não feche a janela antes do fim do turno**: isso interrompe a tarefa e a ponte retorna falha com o motivo.
-- `--watch-native=false`: worker sem tela (stream estruturado) e uma janela separada, somente leitura, com o log traduzido. Fechar essa janela não afeta a tarefa. Nesse modo, o worker Antigravity esvazia temporariamente os MCPs globais de `~/.gemini/config/mcp_config.json` e restaura os bytes exatos ao terminar (conferidos por SHA-256).
-- `--no-watch`: nenhuma janela. Use quando ninguém for acompanhar.
-- Em todos os modos, o log legível fica em `%LOCALAPPDATA%\SimpleOrchestrator\live\<run>\`.
+- Se a CLI do worker mostrar um diálogo (aviso de limite de uso, confirmação, login), a tarefa fica parada até o usuário responder na janela. Avise o usuário se a espera demorar.
+- `--watch-native=false`: worker sem tela (stream estruturado) e uma janela separada, somente leitura, com o log traduzido. Fechar essa janela não afeta a tarefa.
+- `--no-watch`: worker sem tela e nenhuma janela. Use quando ninguém for acompanhar.
+- Nos dois modos sem tela, o worker Antigravity esvazia temporariamente os MCPs globais de `~/.gemini/config/mcp_config.json` e restaura os bytes exatos ao terminar (conferidos por SHA-256).
+- Em todos os modos, o log legível fica em `%LOCALAPPDATA%\SimpleOrchestrator\live\<run_id>\<task_id>-<attempt_id>.live.log`.
 
 ## 4. Confirmar e encerrar
 

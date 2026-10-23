@@ -205,3 +205,33 @@ func TestResolveInteractive(t *testing.T) {
 		t.Error("missing codex.js must fail")
 	}
 }
+
+func TestRunTask_ResumeFailsFastWhenChatIsOpenElsewhere(t *testing.T) {
+	launched := false
+	a := NewAdapter(`C:\fake\codex.exe`)
+	a.NativeWatch = true
+	a.ThreadLocked = func(string) bool { return true }
+	a.Launch = func(string, []string) (<-chan struct{}, func(), error) {
+		launched = true
+		return make(chan struct{}), func() {}, nil
+	}
+	cmd := nativeCmd()
+	cmd.WorkerSessionID = "sess-open"
+	res, err := a.RunTask(context.Background(), cmd)
+	if err == nil || launched || !strings.Contains(res.Summary, "aberto em outro app") || res.WorkerSessionID != "sess-open" {
+		t.Fatalf("res=%+v err=%v launched=%v", res, err, launched)
+	}
+}
+
+func TestCodexThreadLocked_MissingOrFreeLockIsNotLocked(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", home)
+	if codexThreadLocked("nope") {
+		t.Fatal("missing lock file must not count as locked")
+	}
+	_ = os.MkdirAll(filepath.Join(home, "thread-writer-locks"), 0o755)
+	_ = os.WriteFile(filepath.Join(home, "thread-writer-locks", "free.lock"), nil, 0o644)
+	if codexThreadLocked("free") {
+		t.Fatal("a lock file nobody holds must not count as locked")
+	}
+}

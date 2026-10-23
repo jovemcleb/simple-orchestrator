@@ -35,6 +35,10 @@ type Adapter struct {
 	Probe        TurnProbe
 	SyncIDE      func(sid string, notifyUI bool)
 	PollInterval time.Duration
+	// NoFinalGrace is how long an idle turn without a final answer must persist
+	// before it counts as a failure. ConversationOpen is replaceable in tests.
+	NoFinalGrace     time.Duration
+	ConversationOpen func(sessionID string) bool
 }
 
 func NewAdapter(cliPath, mcpConfigPath string, autoSkipMCP bool) *Adapter {

@@ -30,7 +30,7 @@
 
 ## Próxima ação
 
-Publicar a v0.1 e colher retorno de testadores. Depois: T10 (adaptador Claude, ou outro provedor seguindo `CONTRIBUTING.md`), validar o Copilot quando houver conta com modelos explícitos e T12 (validação visual nas UIs Codex Desktop e Antigravity IDE como maestras). A partir do Codex Desktop, o `delegate` precisa rodar fora do sandbox (aprovação/escalação), conforme `docs/validation/first-pair.md`.
+v0.1.0 publicada em https://github.com/jovemcleb/simple-orchestrator; continuação de chat existente validada nos dois workers (v0.1.1, com recusa quando a conversa está aberta em outro app/janela). Próximo: colher retorno de testadores; depois T10 (adaptador Claude, ou outro provedor seguindo `CONTRIBUTING.md`), validar o Copilot quando houver conta com modelos explícitos e T12 (validação visual nas UIs Codex Desktop e Antigravity IDE como maestras). A partir do Codex Desktop, o `delegate` precisa rodar fora do sandbox (aprovação/escalação), conforme `docs/validation/first-pair.md`.
 
 ## Pendências posteriores
 

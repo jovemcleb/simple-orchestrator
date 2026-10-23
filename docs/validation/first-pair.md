@@ -28,6 +28,18 @@ Ensaios de apoio na mesma data, chamando a ponte direto do terminal: Codex TUI `
 - Maestra AGY headless (`agy -p`): ~3 min até disparar o `delegate` e ~30 s para retomar após o fim do worker; o custo está na inicialização/planejamento da maestra, não na ponte.
 - Modelo observado no AGY interativo: `unknown` (o transcript não registra o modelo).
 
+## Continuar um chat existente (23/10/2026)
+
+| Teste | Resultado |
+| --- | --- |
+| Codex como worker, continuando o chat "T09 AGY para Codex 2" pelo nome (`--worker-chat`) | Passou em 16 s: mesma sessão `01a169f8…`; a resposta citou o token do turno anterior (`MYO_RESUME_CODEX_OK MYO_T09_CODEX_OK`). |
+| Antigravity como worker, continuando a conversa `6fdc67c3…` pelo ID (`--worker-session`) | Passou em 19 s: mesma conversa; a resposta citou o token anterior (`MYO_RESUME_AGY_OK MYO_T09_AGY_OK`). |
+| Codex: continuar uma conversa aberta em outro app | Primeira tentativa travou até o timeout: a TUI mostrava "This conversation is open in another app". O Codex mantém uma trava de sistema em `~/.codex/thread-writer-locks/<id>.lock` enquanto a conversa está aberta (o Codex Desktop e o VS Code seguravam 15 de 16 conversas). Corrigido: a ponte detecta a trava e recusa em 0,5 s com instrução. |
+| Antigravity: continuar uma conversa aberta em outra janela do `agy` | O `agy` só avisa ("Conversation already open … may cause conflicts") e as duas instâncias regravaram o `transcript.jsonl` (sumiram passos anteriores). Corrigido: a ponte recusa se outro `agy` estiver aberto na conversa (3,3 s, sem chamar modelo). Conversas abertas na IDE do Antigravity não são detectadas. |
+| Antigravity: passo de sistema antes da resposta | A ponte encerrou cedo, com "sem resposta final", porque o índice ainda dizia ocioso. Corrigido: um passo que não é do modelo não encerra o turno, e "sem resposta final" só vale se persistir por 30 s. |
+
+Achado adicional: a TUI do Codex pode abrir diálogos (por exemplo, "Approaching rate limits — switch model?") que esperam o usuário; se isso ocorrer durante o turno delegado, a tarefa fica parada até alguém responder na janela.
+
 ## Limites e pendências
 
 - As maestras foram as CLIs (`codex exec`, `agy -p`), não as UIs Codex Desktop e Antigravity IDE. Os mecanismos testados (sandbox do Codex, `run_command`/job do AGY) são os mesmos que as UIs usam para comandos, mas a validação visual nas UIs continua como gate próprio (T12).

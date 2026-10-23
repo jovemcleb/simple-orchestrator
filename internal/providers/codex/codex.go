@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -26,6 +27,26 @@ type Adapter struct {
 	Launch       NativeLauncher
 	SessionsDir  string
 	PollInterval time.Duration
+	// ThreadLocked reports whether another app holds the conversation; tests replace it.
+	ThreadLocked func(sessionID string) bool
+}
+
+// codexThreadLocked reports whether another process (Codex Desktop, the VS Code
+// extension or another Codex window) holds the conversation. Codex keeps an OS
+// lock on thread-writer-locks/<id>.lock while a thread is open, and a second
+// client blocks on "This conversation is open in another app".
+func codexThreadLocked(sessionID string) bool {
+	home := strings.TrimSpace(os.Getenv("CODEX_HOME"))
+	if home == "" {
+		h, _ := os.UserHomeDir()
+		home = filepath.Join(h, ".codex")
+	}
+	p := filepath.Join(home, "thread-writer-locks", sessionID+".lock")
+	if _, err := os.Stat(p); err != nil {
+		return false
+	}
+	_, err := os.ReadFile(p)
+	return err != nil
 }
 
 func NewAdapter(cliPath string) *Adapter {
@@ -310,6 +331,18 @@ func (a *Adapter) RunTask(ctx context.Context, cmd protocol.CommandEnvelope) (ru
 	cli := cmd.Profile.CLIPath
 	if strings.TrimSpace(cli) == "" {
 		cli = a.CLIPath
+	}
+
+	if sid := strings.TrimSpace(cmd.WorkerSessionID); sid != "" {
+		locked := a.ThreadLocked
+		if locked == nil {
+			locked = codexThreadLocked
+		}
+		if locked(sid) {
+			msg := fmt.Sprintf("o chat %s do Codex está aberto em outro app (Codex Desktop, extensão do VS Code ou outra janela do Codex) e o Codex só permite um app por conversa. Feche esse chat lá (ou o app) e delegue de novo, ou delegue para um chat novo", sid)
+			monitor.FromContext(ctx).Line("FALHA: " + msg)
+			return runtime.WorkerResult{WorkerSessionID: sid, ObservedModel: "unknown", Status: protocol.StatusFailed, Summary: msg}, errors.New(msg)
+		}
 	}
 
 	if a.NativeWatch {

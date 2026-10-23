@@ -106,15 +106,18 @@ func buildEngine(stateDir, agyCLI, codexCLI, mcpConfig string, skipMCP bool, cus
 		workers[k] = v
 	}
 	eng := runtime.NewEngine(st, workers)
-	if !noWatch {
-		mon := monitor.New(st.BaseDir(), terminalOpener, nil)
-		if native {
-			mon.SetNative(string(protocol.ProviderCodex))
-			mon.SetNative(string(protocol.ProviderAntigravity))
-			mon.SetNative(string(protocol.ProviderCopilot))
-		}
-		eng.SetMonitor(mon)
+	// --no-watch opens no window, but the live log is still written.
+	opener := terminalOpener
+	if noWatch {
+		opener = nil
 	}
+	mon := monitor.New(st.BaseDir(), opener, nil)
+	if native {
+		mon.SetNative(string(protocol.ProviderCodex))
+		mon.SetNative(string(protocol.ProviderAntigravity))
+		mon.SetNative(string(protocol.ProviderCopilot))
+	}
+	eng.SetMonitor(mon)
 	return eng, st, nil
 }
 
